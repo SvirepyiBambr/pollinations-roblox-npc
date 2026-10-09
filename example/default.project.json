@@ -1,0 +1,21 @@
+{
+  "name": "pollinations-npc-example",
+  "tree": {
+    "$className": "DataModel",
+    "ServerScriptService": {
+      "$className": "ServerScriptService",
+      "PollinationsNPC": {
+        "$path": "src"
+      },
+      "TalkingNPC": {
+        "$path": "example/TalkingNPC.server.luau"
+      }
+    },
+    "Workspace": {
+      "$className": "Workspace",
+      "$properties": {
+        "FilteringEnabled": true
+      }
+    }
+  }
+}
