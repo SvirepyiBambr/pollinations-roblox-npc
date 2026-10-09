@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Pollinations NPC for Roblox — live demo</title>
+<style>
+  :root { --bg:#0e1219; --panel:#161b24; --line:#252c38; --text:#e8eef6; --muted:#9aa8ba; --accent:#7abaff; --npc:#2a3342; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:16px/1.5 system-ui,Segoe UI,Roboto,sans-serif; }
+  header { padding:22px 20px; border-bottom:1px solid var(--line); }
+  header h1 { margin:0 0 4px; font-size:20px; }
+  header p { margin:0; color:var(--muted); font-size:14px; }
+  header a { color:var(--accent); }
+  main { max-width:760px; margin:0 auto; padding:20px; display:grid; gap:16px; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:16px; }
+  label { font-size:13px; color:var(--muted); display:block; margin-bottom:6px; }
+  input, button { font:inherit; }
+  input[type=password], input[type=text] { width:100%; padding:10px 12px; background:#0d1117; color:var(--text); border:1px solid var(--line); border-radius:8px; }
+  .row { display:flex; gap:8px; }
+  button { padding:10px 14px; background:var(--accent); color:#07121f; border:0; border-radius:8px; font-weight:600; cursor:pointer; }
+  button:disabled { opacity:.5; cursor:default; }
+  #chat { min-height:260px; max-height:420px; overflow-y:auto; display:flex; flex-direction:column; gap:10px; }
+  .msg { padding:10px 12px; border-radius:10px; max-width:85%; white-space:pre-wrap; }
+  .npc { background:var(--npc); align-self:flex-start; }
+  .me { background:#1d3a5c; align-self:flex-end; }
+  .err { color:#ff9a9a; font-size:13px; }
+  .hint { color:var(--muted); font-size:13px; }
+  code { background:#0d1117; padding:2px 6px; border-radius:6px; font-size:13px; }
+  pre { background:#0d1117; border:1px solid var(--line); border-radius:8px; padding:12px; overflow-x:auto; font-size:12.5px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Pollinations NPC for Roblox</h1>
+  <p>Live demo of the Luau module — the same <code>POST /v1/chat/completions</code> call a Roblox NPC makes, from your browser.
+     &nbsp;·&nbsp; <a href="https://github.com/SvirepyiBambr/pollinations-roblox-npc">source &amp; Luau module</a> · quest #15583</p>
+</header>
+<main>
+  <div class="card">
+    <label for="key">Your Pollinations key (optional — raises limits)</label>
+    <div class="row">
+      <input id="key" type="password" placeholder="sk_… or pk_… (kept in localStorage only)" />
+      <button id="save">Save</button>
+    </div>
+    <p class="hint" id="keystate">No key saved — anonymous tier is rate-limited.</p>
+  </div>
+
+  <div class="card">
+    <div id="chat"></div>
+  </div>
+
+  <div class="card">
+    <label for="say">Say something to Tomo (the lighthouse keeper)</label>
+    <div class="row">
+      <input id="say" type="text" placeholder="Who are you?" autocomplete="off" />
+      <button id="send">Send</button>
+    </div>
+    <p class="hint">Tomo keeps a short per-player memory, exactly like the in-game module.</p>
+  </div>
+
+  <div class="card">
+    <label>In Roblox (server script)</label>
+<pre>local NpcDialogue = require(ServerScriptService.PollinationsNPC)
+local tomo = NpcDialogue.attach(workspace.Tomo, {
+    apiKey = game:GetService("SecretStore"):GetSecret("POLLINATIONS_API_KEY"),
+    name = "Tomo",
+    persona = "You keep the old lighthouse on Pollen Island and love bad sea puns.",
+})
+print(tomo:reply(player, "Who are you?"))</pre>
+  </div>
+</main>
+<script>
+(function () {
+  "use strict";
+  var SEED_PERSONA = "You are Tomo, an NPC in a Roblox game. You keep the old lighthouse on Pollen Island and love bad sea puns. Reply in character, in one or two short spoken sentences. Keep everything appropriate for players of all ages. Never mention being an AI, a model, or an API.";
+  var ENDPOINT = "https://gen.pollinations.ai/v1/chat/completions";
+  var history = [{ role: "system", content: SEED_PERSONA }];
+
+  var $ = function (id) { return document.getElementById(id); };
+  var chat = $("chat"), say = $("say"), keyInput = $("key"), send = $("send");
+
+  function bubble(text, cls) {
+    var d = document.createElement("div");
+    d.className = "msg " + cls;
+    d.textContent = text;
+    chat.appendChild(d);
+    chat.scrollTop = chat.scrollHeight;
+    return d;
+  }
+  function err(text) {
+    var d = document.createElement("div");
+    d.className = "err";
+    d.textContent = text;
+    chat.appendChild(d);
+  }
+
+  var savedKey = localStorage.getItem("pollinations_key") || "";
+  if (savedKey) {
+    keyInput.value = savedKey;
+    $("keystate").textContent = "Key saved (localStorage). Limits raised.";
+  }
+  $("save").addEventListener("click", function () {
+    if (keyInput.value.trim()) {
+      localStorage.setItem("pollinations_key", keyInput.value.trim());
+      $("keystate").textContent = "Key saved (localStorage). Limits raised.";
+    } else {
+      localStorage.removeItem("pollinations_key");
+      $("keystate").textContent = "Key cleared — anonymous tier is rate-limited.";
+    }
+  });
+
+  bubble("Ahoy! Tomo here. Ask me anything, and mind the puns.", "npc");
+
+  async function reply(text) {
+    history.push({ role: "user", content: text });
+    var res, data;
+    try {
+      res = await fetch(ENDPOINT, {
+        method: "POST",
+        headers: Object.assign(
+          { "Content-Type": "application/json" },
+          savedKey ? { Authorization: "Bearer " + savedKey } : {}
+        ),
+        body: JSON.stringify({ model: "openai", messages: history, private: true })
+      });
+    } catch (e) {
+      err("Network error: " + e.message);
+      return;
+    }
+    if (!res.ok) {
+      var kind = res.status === 401 || res.status === 403 ? "auth" :
+                 res.status === 402 ? "quota" :
+                 res.status >= 500 ? "server" : "http";
+      err("NPC is quiet right now (" + kind + ", HTTP " + res.status + "). The Roblox module returns this same kind instead of crashing.");
+      history.pop();
+      return;
+    }
+    data = await res.json();
+    var replyText = data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+    if (!replyText) { err("Empty response."); return; }
+    history.push({ role: "assistant", content: replyText });
+    bubble(replyText, "npc");
+  }
+
+  async function onSend() {
+    var text = say.value.trim();
+    if (!text) return;
+    say.value = "";
+    bubble(text, "me");
+    send.disabled = true;
+    try { await reply(text); } finally { send.disabled = false; }
+  }
+  send.addEventListener("click", onSend);
+  say.addEventListener("keydown", function (e) { if (e.key === "Enter") onSend(); });
+})();
+</script>
+</body>
+</html>
